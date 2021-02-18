@@ -793,6 +793,36 @@ def pick_password(request, token):
         'form': form
     })
 
+class AcademyInviteView(APIView):
+    @capable_of('admissions_developer')
+    def put(self, request, user_id=None, academy_id=None):
+        if user_id is not None:
+            user = ProfileAcademy.objects.filter(user__id=user_id,academy__id=academy_id).first() 
+            print("///////////////////",user)
+
+            if user is None:
+                raise ValidationException("Member not found", 400)
+            invite = UserInvite.objects.filter(academy__id=academy_id, email=user.email, author=request.user).first() #check author
+            print("///////////////////",invite)
+            if invite is None:
+                raise ValidationException("Invite not found", 400)
+            if invite.sent_at is not None:
+
+                now = timezone.now()
+                minutes_diff = (now - invite.sent_at).total_seconds() / 60.0
+                
+                if minutes_diff < 2:
+                    raise ValidationException("Imposible to resend invitation", 400)
+            print("///////////////////",now)
+            print("///////////////////",invite.sent_at)
+
+            resend_invite(invite.token, invite.email, invite.first_name)
+
+            invite.sent_at = timezone.now()
+            invite.save()
+            serializer = UserInviteSerializer(invite, many=False)
+            return Response(serializer.data)
+
 def render_invite(request, token):
     _dict = request.POST.copy()
     _dict["token"] = token
